@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tráfego Pro | Gestão Elite</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        :root { --primary: #00ff66; --bg: #050505; --card: #111; --red: #ff3333; }
+        * { box-sizing: border-box; font-family: 'Poppins', sans-serif; }
+        body { margin: 0; background: var(--bg); color: white; overflow-x: hidden; }
+
+        /* LOGIN */
+        #login-screen { display: flex; align-items: center; justify-content: center; height: 100vh; background: radial-gradient(circle, #0a220a, #050505); }
+        .login-box { background: rgba(255,255,255,0.03); backdrop-filter: blur(20px); padding: 40px; border-radius: 25px; border: 1px solid rgba(255,255,255,0.1); width: 90%; max-width: 380px; text-align: center; }
+        input { width: 100%; padding: 15px; margin-bottom: 15px; background: #000; border: 1px solid #333; color: white; border-radius: 12px; outline: none; }
+        .btn-green { width: 100%; padding: 15px; background: var(--primary); color: black; border: none; border-radius: 12px; font-weight: 800; cursor: pointer; }
+
+        /* AREA CURSO */
+        #course-area { display: none; padding: 20px; max-width: 1200px; margin: auto; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+        .card { background: var(--card); border-radius: 15px; border: 1px solid #222; overflow: hidden; }
+        .video-box { width: 100%; aspect-ratio: 16/9; }
+        iframe { width: 100%; height: 100%; border: none; }
+
+        /* PAINEL DE CONTROLE */
+        #admin-btn { position: fixed; bottom: 20px; right: 20px; width: 60px; height: 60px; background: var(--primary); border-radius: 50%; display: none; align-items: center; justify-content: center; font-size: 24px; cursor: pointer; z-index: 1000; box-shadow: 0 0 20px var(--primary); }
+        #admin-panel { position: fixed; bottom: 90px; right: 20px; width: 310px; background: #151515; border: 1px solid var(--primary); border-radius: 20px; padding: 20px; display: none; z-index: 1000; box-shadow: 0 10px 40px #000; }
+        .user-item { display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #222; background: #1a1a1a; margin-bottom: 5px; border-radius: 8px; }
+        .btn-cancel { background: var(--red); color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: bold; }
+    </style>
+</head>
+<body oncontextmenu="return false;">
+
+    <div id="login-screen">
+        <div class="login-box">
+            <h1 style="color: var(--primary); margin-bottom: 10px;">TRÁFEGO PRO</h1>
+            <p style="color:#888; font-size: 12px; margin-bottom: 30px;">Gerenciador de Acessos</p>
+            <input type="text" id="user" placeholder="Usuário">
+            <input type="password" id="pass" placeholder="Senha">
+            <button class="btn-green" onclick="fazerLogin()">ACESSAR</button>
+        </div>
+    </div>
+
+    <div id="course-area">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:30px;">
+            <h2 style="margin:0">Módulos <span style="color:var(--primary)">Elite</span></h2>
+            <button onclick="location.reload()" style="background:none; color:white; border:1px solid #333; padding:8px 15px; border-radius:10px; cursor:pointer;">Sair</button>
+        </div>
+        <div class="grid" id="grid-videos"></div>
+    </div>
+
+    <div id="admin-btn" onclick="toggleAdmin()">⚙️</div>
+
+    <div id="admin-panel">
+        <h3 style="margin:0 0 15px 0; color:var(--primary); text-align:center;">Gestão de Alunos</h3>
+        <input type="text" id="new-u" placeholder="Nome do Aluno">
+        <input type="text" id="new-p" placeholder="Senha do Aluno">
+        <button class="btn-green" style="padding:10px; margin-bottom:15px;" onclick="criarAluno()">GERAR NOVO ACESSO</button>
+        
+        <p style="font-size: 12px; color: #888; margin-bottom: 10px;">Alunos Ativos:</p>
+        <div id="lista-alunos" style="max-height: 250px; overflow-y: auto;"></div>
+        <button onclick="toggleAdmin()" style="width:100%; background:none; color:#666; border:none; margin-top:15px; cursor:pointer">Fechar Painel</button>
+    </div>
+
+    <script>
+        // CONFIGURAÇÃO FIREBASE
+        const firebaseConfig = { databaseURL: "https://trefegopagoacessopro-default-rtdb.firebaseio.com/" };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        const VIDEOS = ["2bjaqOUG5OQ", "UV07NE-1j_E", "P-5NFHvayvE", "GpwtOxr2oVQ", "N95tVD520zM", "nnuaTvODcM0", "W2o3S8O4Lgk", "pKS_D8mYE84", "xhS24Bg_ElQ", "hfBDS6Wdj2I", "01K65I7a2BM", "qZ_EaucUC5k", "ms27JjZNQpA", "fSG84Jvuu70", "MKNt3VqhSbg", "Gv-sicmgNGQ", "U4vzPUJPhDM", "rHkJVgRNCPc", "yhHp8jYikYA"];
+
+        function fazerLogin() {
+            const u = document.getElementById('user').value.trim();
+            const p = document.getElementById('pass').value.trim();
+
+            if (u === "premium_boss" && p === "admin777") {
+                liberar(true, u);
+            } else {
+                db.ref('alunos/' + u).once('value', (snap) => {
+                    if (snap.exists() && snap.val().senha === p) {
+                        liberar(false, u);
+                    } else { alert("Acesso inválido ou cancelado!"); }
+                });
+            }
+        }
+
+        function liberar(isAdmin, usuarioLogado) {
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('course-area').style.display = 'block';
+
+            // --- SISTEMA VIGIA (EXPULSÃO EM TEMPO REAL) ---
+            if (!isAdmin) {
+                db.ref('alunos/' + usuarioLogado).on('value', (snap) => {
+                    if (!snap.exists()) {
+                        alert("AVISO: Seu acesso foi revogado pelo administrador!");
+                        location.reload(); 
+                    }
+                });
+            }
+
+            if(isAdmin) {
+                document.getElementById('admin-btn').style.display = 'flex';
+                atualizarLista();
+            }
+            carregarVideos();
+        }
+
+        function carregarVideos() {
+            const g = document.getElementById('grid-videos');
+            if(g.children.length > 0) return;
+            VIDEOS.forEach((id, i) => {
+                g.innerHTML += `
+                    <div class="card">
+                        <div class="video-box"><iframe src="https://www.youtube.com/embed/${id}" allowfullscreen></iframe></div>
+                        <div style="padding:15px"><h4 style="margin:0; color:var(--primary)">Aula ${i+1}</h4></div>
+                    </div>`;
+            });
+        }
+
+        function toggleAdmin() {
+            const p = document.getElementById('admin-panel');
+            p.style.display = (p.style.display === 'block') ? 'none' : 'block';
+        }
+
+        function criarAluno() {
+            const u = document.getElementById('new-u').value.trim();
+            const p = document.getElementById('new-p').value.trim();
+            if(u && p) {
+                db.ref('alunos/' + u).set({ senha: p }).then(() => {
+                    alert("Aluno " + u + " criado!");
+                    document.getElementById('new-u').value = "";
+                    document.getElementById('new-p').value = "";
+                });
+            }
+        }
+
+        function cancelar(u) {
+            if(confirm("EXPULSAR AGORA o aluno " + u + "?")) {
+                db.ref('alunos/' + u).remove();
+            }
+        }
+
+        function atualizarLista() {
+            db.ref('alunos').on('value', (snap) => {
+                const lista = document.getElementById('lista-alunos');
+                lista.innerHTML = "";
+                snap.forEach((aluno) => {
+                    lista.innerHTML += `
+                        <div class="user-item">
+                            <span style="font-size:13px; font-weight:bold;">${aluno.key}</span>
+                            <button class="btn-cancel" onclick="cancelar('${aluno.key}')">CANCELAR</button>
+                        </div>`;
+                });
+            });
+        }
+    </script>
+</body>
+</html>
